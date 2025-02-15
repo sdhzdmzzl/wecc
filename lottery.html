@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>抽卡系统</title>
+    <style>
+        body {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+        }
+        .draw-result {
+            margin: 5px 0;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .special-card {
+            color: #ff0000;
+            margin: 5px 0;
+        }
+        .button-group {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px 0;
+            margin: 0;
+            z-index: 100;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        #results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .draw-result h3 {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+        }
+        .draw-result p {
+            margin: 3px 0;
+            font-size: 0.9rem;
+        }
+        .lucky-title {
+            color: #ff9900;
+            font-weight: bold;
+            background: linear-gradient(45deg, #ff9900, #ff5500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            padding: 0 5px;
+            animation: shine 1s infinite;
+        }
+        @keyframes shine {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+        .lucky-banner {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: #fff;
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            animation: glow 1.5s ease-in-out infinite;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        @keyframes glow {
+            0% {
+                box-shadow: 0 0 5px #FFD700;
+            }
+            50% {
+                box-shadow: 0 0 20px #FFA500;
+            }
+            100% {
+                box-shadow: 0 0 5px #FFD700;
+            }
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            #results {
+                grid-template-columns: 1fr;
+            }
+            button {
+                width: calc(50% - 10px);
+                margin-bottom: 5px;
+            }
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="button-group">
+        <div class="input-group">
+            <label for="rounds">抽卡轮数：</label>
+            <input type="number" id="rounds" value="1" min="1" max="10">
+        </div>
+        <button onclick="startDraw()">开始抽卡</button>
+        <button onclick="clearResults()">清空结果</button>
+    </div>
+    <div id="results"></div>
+    <script>
+        // 定义卡池
+        const normalPool = ['普通卡'];
+        const special1Pool = ['来万', '孔德', '麦娘', '特奥'];
+        const special2Pool = ['拉菲尼亚', '莫拉塔'];
+
+        // 定义每轮的概率数组 (10次，每次11抽的概率)
+        const roundProbabilities = [
+            // 第1次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.00886-0.04153*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.00886 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.04153*0.4 }
+            },
+            // 第2次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.02953-0.13842*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.02953 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.13842*0.4 }
+            },
+            // 第3次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.00295-0.01384*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.00295 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.01384*0.4 }
+            },
+            // 第4次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.02953-0.13842*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.02953 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.13842*0.4 }
+            },
+            // 第5次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.00886-0.04153*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.00886 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.04153*0.4 }
+            },
+            // 第6次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.02953-0.13842*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.02953 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.13842*0.4 }
+            },
+            // 第7次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.00295-0.01384*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.00295 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.01384*0.4 }
+            },
+            // 第8次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.02953-0.13842*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.02953 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.13842*0.4 }
+            },
+            // 第9次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.00886-0.04153*0.4 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.00886 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.04153*0.4 }
+            },
+            // 第10次11抽的概率
+            {
+                normal: { first9: 1-0.0002-0.00041*0.4, the10th: 0, last: 1-0.10435-0.19565 },
+                special1: { first9: 0.0002, the10th: 0, last: 0.10435 },
+                special2: { first9: 0.00041*0.4, the10th: 0, last: 0.19565 }
+            }
+        ];
+
+        // 定义第二轮及之后的概率数组 (10次，每次11抽的概率)
+        const subsequentRoundProbabilities = [
+            // 第1次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.00986-0.05153*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.00986 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.05153*0.5 }
+            },
+            // 第2次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.03953-0.14842*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.03953 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.14842*0.5 }
+            },
+            // 第3次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.00395-0.01884*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.00395 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.01884*0.5 }
+            },
+            // 第4次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.03953-0.14842*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.03953 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.14842*0.5 }
+            },
+            // 第5次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.00986-0.05153*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.00986 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.05153*0.5 }
+            },
+            // 第6次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.03953-0.14842*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.03953 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.14842*0.5 }
+            },
+            // 第7次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.00395-0.01884*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.00395 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.01884*0.5 }
+            },
+            // 第8次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.03953-0.14842*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.03953 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.14842*0.5 }
+            },
+            // 第9次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.00986-0.05153*0.5 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.00986 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.05153*0.5 }
+            },
+            // 第10次11抽的概率
+            {
+                normal: { first9: 1-0.0003-0.00051*0.5, the10th: 0, last: 1-0.11435-0.20565 },
+                special1: { first9: 0.0003, the10th: 0, last: 0.11435 },
+                special2: { first9: 0.00051*0.5, the10th: 0, last: 0.20565 }
+            }
+        ];
+
+        function drawCard(probabilities) {
+            const rand = Math.random();
+            if (rand < probabilities.special2) {
+                return special2Pool[Math.floor(Math.random() * special2Pool.length)];
+            } else if (rand < probabilities.special2 + probabilities.special1) {
+                return special1Pool[Math.floor(Math.random() * special1Pool.length)];
+            } else {
+                return normalPool[0];
+            }
+        }
+
+        function performRound(roundCount) {
+            const results = [];
+            
+            // 执行指定轮数的11抽
+            for (let round = 0; round < roundCount; round++) {
+                const roundResults = [];
+                const probabilities = round === 0 ? roundProbabilities : subsequentRoundProbabilities;
+                for (let draw = 0; draw < 10; draw++) {
+                    const currentDraw = [];
+                    const currentProbabilities = probabilities[draw];
+                    
+                    // 前9张卡
+                    for (let i = 0; i < 9; i++) {
+                        const probs = {
+                            special2: currentProbabilities.special2.first9,
+                            special1: currentProbabilities.special1.first9
+                        };
+                        currentDraw.push(drawCard(probs));
+                    }
+                    
+                    // 第10张卡
+                    const tenthProbs = {
+                        special2: currentProbabilities.special2.the10th,
+                        special1: currentProbabilities.special1.the10th
+                    };
+                    currentDraw.push(drawCard(tenthProbs));
+                    
+                    // 第11张保底
+                    const lastProbs = {
+                        special2: currentProbabilities.special2.last,
+                        special1: currentProbabilities.special1.last
+                    };
+                    currentDraw.push(drawCard(lastProbs));
+                    
+                    roundResults.push(currentDraw);
+                }
+                results.push(roundResults);
+            }
+            
+            return results;
+        }
+
+        function displayResults(results) {
+            const resultDiv = document.getElementById('results');
+            resultDiv.innerHTML = '';
+            
+            results.forEach((roundResults, roundIndex) => {
+                // 计算整轮抽卡的特殊卡总数
+                const totalSpecialCards = roundResults.reduce((total, draw) => {
+                    return total + draw.filter(card => 
+                        special1Pool.includes(card) || special2Pool.includes(card)
+                    ).length;
+                }, 0);
+                
+                // 如果是欧皇（整轮特殊卡 >= 2），添加欧皇标题
+                if (totalSpecialCards >= 2) {
+                    const luckyTitle = document.createElement('div');
+                    luckyTitle.className = 'lucky-banner';
+                    luckyTitle.innerHTML = `✨ 第${roundIndex + 1}轮欧皇驾到！获得了 ${totalSpecialCards} 张特殊卡 ✨`;
+                    resultDiv.appendChild(luckyTitle);
+                }
+                
+                roundResults.forEach((draw, drawIndex) => {
+                    const drawResult = document.createElement('div');
+                    drawResult.className = 'draw-result';
+                    drawResult.innerHTML = `<h3>第${roundIndex + 1}轮第${drawIndex + 1}次抽卡结果：</h3>`;
+                    
+                    draw.forEach((card, cardIndex) => {
+                        if (special1Pool.includes(card) || special2Pool.includes(card)) {
+                            drawResult.innerHTML += `<p class="special-card">第${cardIndex + 1}张：${card}</p>`;
+                        } else {
+                            drawResult.innerHTML += `<p>第${cardIndex + 1}张：未抽到特殊卡</p>`;
+                        }
+                    });
+                    
+                    resultDiv.appendChild(drawResult);
+                });
+            });
+        }
+
+        function startDraw() {
+            const roundCount = parseInt(document.getElementById('rounds').value, 10);
+            const results = performRound(roundCount);
+            displayResults(results);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
