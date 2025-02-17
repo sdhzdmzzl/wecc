@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>抽卡系统</title>
+    <style>
+        body {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 15px;
+            font-family: Arial, sans-serif;
+        }
+        .draw-result {
+            margin: 5px 0;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .special-card {
+            color: #ff0000;
+            margin: 5px 0;
+        }
+        .button-group {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px 0;
+            margin: 0;
+            z-index: 100;
+        }
+        button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        #results {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .draw-result h3 {
+            margin: 0 0 8px 0;
+            font-size: 1rem;
+        }
+        .draw-result p {
+            margin: 3px 0;
+            font-size: 0.9rem;
+        }
+        .lucky-title {
+            color: #ff9900;
+            font-weight: bold;
+            background: linear-gradient(45deg, #ff9900, #ff5500);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            padding: 0 5px;
+            animation: shine 1s infinite;
+        }
+        @keyframes shine {
+            0% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.8;
+            }
+            100% {
+                opacity: 1;
+            }
+        }
+        .lucky-banner {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            color: #fff;
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 1.2rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+            animation: glow 1.5s ease-in-out infinite;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        @keyframes glow {
+            0% {
+                box-shadow: 0 0 5px #FFD700;
+            }
+            50% {
+                box-shadow: 0 0 20px #FFA500;
+            }
+            100% {
+                box-shadow: 0 0 5px #FFD700;
+            }
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            #results {
+                grid-template-columns: 1fr;
+            }
+            button {
+                width: calc(50% - 10px);
+                margin-bottom: 5px;
+            }
+        }
+        .input-group {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="button-group">
+        <div class="input-group">
+            <label for="rounds">抽卡轮数：</label>
+            <input type="number" id="rounds" value="1" min="1" max="10">
+        </div>
+        <button onclick="startDraw()">开始抽卡</button>
+        <button onclick="clearResults()">清空结果</button>
+    </div>
+    <div id="results"></div>
+    <script>
+        // 定义卡池
+        const normalPool = ['普通卡'];
+        const special1Pool = ['鲁美', '独狼', '魏群'];
+        const special2Pool = [];
+
+        const special2inpoolProbability = 0; // 黑卡占（黑卡+高C红卡）概率
+
+        const special1infirst9Probability1st = 0.00056; // 黑金卡在第一抽抽卡前9次概率
+        const special2infirst9Probability1st = 0 * special2inpoolProbability; // 黑卡在第一抽抽卡前9次概率
+        const special1in10thProbability1st = special1infirst9Probability1st; // 设定黑金卡在第一抽第10次的概率
+        const special2in10thProbability1st = special2infirst9Probability1st; // 黑卡在第一抽第10次概率
+        const special1inlastProbability1st = 0.01113; // 设定黑金卡在第一抽最后一次的概率
+        const special2inlastProbability1st = 0 * special2inpoolProbability; // 黑卡在第一抽最后一次的概率
+
+        const special1infirst9Probability2nd = special1infirst9Probability1st; // 黑金卡在第二抽抽卡前9次概率
+        const special2infirst9Probability2nd = special2infirst9Probability1st; // 黑卡在第二抽抽卡前9次概率
+        const special1in10thProbability2nd = special1infirst9Probability2nd; // 设定黑金卡在第二抽第10次的概率
+        const special2in10thProbability2nd = special2infirst9Probability2nd; // 黑卡在第二抽第10次概率
+        const special1inlastProbability2nd = 0.2; // 设定黑金卡在第二抽最后一次的概率
+        const special2inlastProbability2nd = 0 * special2inpoolProbability; // 黑卡在第二抽最后一次的概率
+
+        const special1infirst9Probability3rd = special1infirst9Probability1st; // 黑金卡在第三抽抽卡前9次概率
+        const special2infirst9Probability3rd = special2infirst9Probability1st; // 黑卡在第三抽抽卡前9次概率
+        const special1in10thProbability3rd = special1infirst9Probability3rd; // 设定黑金卡在第三抽第10次的概率
+        const special2in10thProbability3rd = special2infirst9Probability3rd; // 黑卡在第三抽第10次概率
+        const special1inlastProbability3rd = 0.01113; // 设定黑金卡在第三抽最后一次的概率
+        const special2inlastProbability3rd = 0 * special2inpoolProbability; // 黑卡在第三抽最后一次的概率
+
+        const special1infirst9Probability4th = special1infirst9Probability1st; // 黑金卡在第四抽抽卡前9次概率
+        const special2infirst9Probability4th = special2infirst9Probability1st; // 黑卡在第四抽抽卡前9次概率
+        const special1in10thProbability4th = special1infirst9Probability4th; // 设定黑金卡在第四抽第10次的概率
+        const special2in10thProbability4th = special2infirst9Probability4th; // 黑卡在第四抽第10次概率
+        const special1inlastProbability4th = 0.2; // 设定黑金卡在第四抽最后一次的概率
+        const special2inlastProbability4th = 0 * special2inpoolProbability; // 黑卡在第四抽最后一次的概率
+
+        const special1infirst9Probability5th = special1infirst9Probability1st; // 黑金卡在第五抽抽卡前9次概率
+        const special2infirst9Probability5th = special2infirst9Probability1st; // 黑卡在第五抽抽卡前9次概率
+        const special1in10thProbability5th = special1infirst9Probability5th; // 设定黑金卡在第五抽第10次的概率
+        const special2in10thProbability5th = special2infirst9Probability5th; // 黑卡在第五抽第10次概率
+        const special1inlastProbability5th = 0.01113; // 设定黑金卡在第五抽最后一次的概率
+        const special2inlastProbability5th = 0 * special2inpoolProbability; // 黑卡在第五抽最后一次的概率
+
+        const special1infirst9Probability6th = special1infirst9Probability1st; // 黑金卡在第六抽抽卡前9次概率
+        const special2infirst9Probability6th = special2infirst9Probability1st; // 黑卡在第六抽抽卡前9次概率
+        const special1in10thProbability6th = special1infirst9Probability6th; // 设定黑金卡在第六抽第10次的概率
+        const special2in10thProbability6th = special2infirst9Probability6th; // 黑卡在第六抽第10次概率
+        const special1inlastProbability6th = 0.2; // 设定黑金卡在第六抽最后一次的概率
+        const special2inlastProbability6th = 0 * special2inpoolProbability; // 黑卡在第六抽最后一次的概率
+
+        const special1infirst9Probability7th = special1infirst9Probability1st; // 黑金卡在第七抽抽卡前9次概率
+        const special2infirst9Probability7th = special2infirst9Probability1st; // 黑卡在第七抽抽卡前9次概率
+        const special1in10thProbability7th = special1infirst9Probability7th; // 设定黑金卡在第七抽第10次的概率
+        const special2in10thProbability7th = special2infirst9Probability7th; // 黑卡在第七抽第10次概率
+        const special1inlastProbability7th = 0.01113; // 设定黑金卡在第七抽最后一次的概率
+        const special2inlastProbability7th = 0.0 * special2inpoolProbability; // 黑卡在第七抽最后一次的概率
+
+        const special1infirst9Probability8th = special1infirst9Probability1st; // 黑金卡在第八抽抽卡前9次概率
+        const special2infirst9Probability8th = special2infirst9Probability1st; // 黑卡在第八抽抽卡前9次概率
+        const special1in10thProbability8th = special1infirst9Probability8th; // 设定黑金卡在第八抽第10次的概率
+        const special2in10thProbability8th = special2infirst9Probability8th; // 黑卡在第八抽第10次概率
+        const special1inlastProbability8th = 0.1; // 设定黑金卡在第八抽最后一次的概率
+        const special2inlastProbability8th = 0 * special2inpoolProbability; // 黑卡在第八抽最后一次的概率
+
+        const special1infirst9Probability9th = special1infirst9Probability1st; // 黑金卡在第九抽抽卡前9次概率
+        const special2infirst9Probability9th = special2infirst9Probability1st; // 黑卡在第九抽抽卡前9次概率
+        const special1in10thProbability9th = special1infirst9Probability9th; // 设定黑金卡在第九抽第10次的概率
+        const special2in10thProbability9th = special2infirst9Probability9th; // 黑卡在第九抽第10次概率
+        const special1inlastProbability9th = 0.01113; // 设定黑金卡在第九抽最后一次的概率
+        const special2inlastProbability9th = 0 * special2inpoolProbability; // 黑卡在第九抽最后一次的概率
+
+        const special1infirst9Probability10th = special1infirst9Probability1st; // 黑金卡在第十抽抽卡前9次概率
+        const special2infirst9Probability10th = special2infirst9Probability1st; // 黑卡在第十抽抽卡前9次概率
+        const special1in10thProbability10th = special1infirst9Probability10th; // 设定黑金卡在第十抽第10次的概率
+        const special2in10thProbability10th = special2infirst9Probability10th; // 黑卡在第十抽第10次概率
+        const special1inlastProbability10th = 1; // 设定黑金卡在第十抽最后一次的概率
+        const special2inlastProbability10th = 0 * special2inpoolProbability; // 黑卡在第十抽最后一次的概率
+
+        // 定义每轮的概率数组 (10次，每次11抽的概率)
+        const roundProbabilities = [
+            // 第1次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability1st - special2infirst9Probability1st, the10th: 1 - special1in10thProbability1st - special2in10thProbability1st, last: 1 - special1inlastProbability1st - special2inlastProbability1st },
+                special1: { first9: special1infirst9Probability1st, the10th: special1in10thProbability1st, last: special1inlastProbability1st },
+                special2: { first9: special2infirst9Probability1st, the10th: special2in10thProbability1st, last: special2inlastProbability1st }
+            },
+            // 第2次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability2nd - special2infirst9Probability2nd, the10th: 1 - special1in10thProbability2nd - special2in10thProbability2nd, last: 1 - special1inlastProbability2nd - special2inlastProbability2nd },
+                special1: { first9: special1infirst9Probability2nd, the10th: special1in10thProbability2nd, last: special1inlastProbability2nd },
+                special2: { first9: special2infirst9Probability2nd, the10th: special2in10thProbability2nd, last: special2inlastProbability2nd }
+            },
+            // 第3次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability3rd - special2infirst9Probability3rd, the10th: 1 - special1in10thProbability3rd - special2in10thProbability3rd, last: 1 - special1inlastProbability3rd - special2inlastProbability3rd },
+                special1: { first9: special1infirst9Probability3rd, the10th: special1in10thProbability3rd, last: special1inlastProbability3rd },
+                special2: { first9: special2infirst9Probability3rd, the10th: special2in10thProbability3rd, last: special2inlastProbability3rd }
+            },
+            // 第4次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability4th - special2infirst9Probability4th, the10th: 1 - special1in10thProbability4th - special2in10thProbability4th, last: 1 - special1inlastProbability4th - special2inlastProbability4th },
+                special1: { first9: special1infirst9Probability4th, the10th: special1in10thProbability4th, last: special1inlastProbability4th },
+                special2: { first9: special2infirst9Probability4th, the10th: special2in10thProbability4th, last: special2inlastProbability4th }
+            },
+            // 第5次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability5th - special2infirst9Probability5th, the10th: 1 - special1in10thProbability5th - special2in10thProbability5th, last: 1 - special1inlastProbability5th - special2inlastProbability5th },
+                special1: { first9: special1infirst9Probability5th, the10th: special1in10thProbability5th, last: special1inlastProbability5th },
+                special2: { first9: special2infirst9Probability5th, the10th: special2in10thProbability5th, last: special2inlastProbability5th }
+            },
+            // 第6次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability6th - special2infirst9Probability6th, the10th: 1 - special1in10thProbability6th - special2in10thProbability6th, last: 1 - special1inlastProbability6th - special2inlastProbability6th },
+                special1: { first9: special1infirst9Probability6th, the10th: special1in10thProbability6th, last: special1inlastProbability6th },
+                special2: { first9: special2infirst9Probability6th, the10th: special2in10thProbability6th, last: special2inlastProbability6th }
+            },
+            // 第7次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability7th - special2infirst9Probability7th, the10th: 1 - special1in10thProbability7th - special2in10thProbability7th, last: 1 - special1inlastProbability7th - special2inlastProbability7th },
+                special1: { first9: special1infirst9Probability7th, the10th: special1in10thProbability7th, last: special1inlastProbability7th },
+                special2: { first9: special2infirst9Probability7th, the10th: special2in10thProbability7th, last: special2inlastProbability7th }
+            },
+            // 第8次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability8th - special2infirst9Probability8th, the10th: 1 - special1in10thProbability8th - special2in10thProbability8th, last: 1 - special1inlastProbability8th - special2inlastProbability8th },
+                special1: { first9: special1infirst9Probability8th, the10th: special1in10thProbability8th, last: special1inlastProbability8th },
+                special2: { first9: special2infirst9Probability8th, the10th: special2in10thProbability8th, last: special2inlastProbability8th }
+            },
+            // 第9次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability9th - special2infirst9Probability9th, the10th: 1 - special1in10thProbability9th - special2in10thProbability9th, last: 1 - special1inlastProbability9th - special2inlastProbability9th },
+                special1: { first9: special1infirst9Probability9th, the10th: special1in10thProbability9th, last: special1inlastProbability9th },
+                special2: { first9: special2infirst9Probability9th, the10th: special2in10thProbability9th, last: special2inlastProbability9th }
+            },
+            // 第10次11抽的概率
+            {
+                normal: { first9: 1 - special1infirst9Probability10th - special2infirst9Probability10th, the10th: 1 - special1in10thProbability10th - special2in10thProbability10th, last: 1 - special1inlastProbability10th - special2inlastProbability10th },
+                special1: { first9: special1infirst9Probability10th, the10th: special1in10thProbability10th, last: special1inlastProbability10th },
+                special2: { first9: special2infirst9Probability10th, the10th: special2in10thProbability10th, last: special2inlastProbability10th }
+            }
+        ];
+
+        const subsequentRoundspecial1infirst9Probability1st = 0.00056; // 黑金卡在第一抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability1st = 0 * special2inpoolProbability; // 黑卡在第一抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability1st = subsequentRoundspecial1infirst9Probability1st; // 设定黑金卡在第一抽第10次的概率
+        const subsequentRoundspecial2in10thProbability1st = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第一抽第10次概率
+        const subsequentRoundspecial1inlastProbability1st = 0.001113; // 设定黑金卡在第一抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability1st = 0 * special2inpoolProbability; // 黑卡在第一抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability2nd = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第二抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability2nd = subsequentRoundspecial2infirst9Probability1st // 黑卡在第二抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability2nd = subsequentRoundspecial1infirst9Probability2nd; // 设定黑金卡在第二抽第10次的概率
+        const subsequentRoundspecial2in10thProbability2nd = subsequentRoundspecial2infirst9Probability2nd; // 黑卡在第二抽第10次概率
+        const subsequentRoundspecial1inlastProbability2nd = 0.2; // 设定黑金卡在第二抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability2nd = 0 * special2inpoolProbability; // 黑卡在第二抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability3rd = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第三抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability3rd = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第三抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability3rd = subsequentRoundspecial1infirst9Probability3rd; // 设定黑金卡在第三抽第10次的概率
+        const subsequentRoundspecial2in10thProbability3rd = subsequentRoundspecial2infirst9Probability3rd; // 黑卡在第三抽第10次概率
+        const subsequentRoundspecial1inlastProbability3rd = 0.01113; // 设定黑金卡在第三抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability3rd = 0 * special2inpoolProbability; // 黑卡在第三抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability4th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第四抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability4th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第四抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability4th = subsequentRoundspecial1infirst9Probability4th; // 设定黑金卡在第四抽第10次的概率
+        const subsequentRoundspecial2in10thProbability4th = subsequentRoundspecial2infirst9Probability4th; // 黑卡在第四抽第10次概率
+        const subsequentRoundspecial1inlastProbability4th = 0.01113; // 设定黑金卡在第四抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability4th = 0 * special2inpoolProbability; // 黑卡在第四抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability5th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第五抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability5th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第五抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability5th = subsequentRoundspecial1infirst9Probability5th; // 设定黑金卡在第五抽第10次的概率
+        const subsequentRoundspecial2in10thProbability5th = subsequentRoundspecial2infirst9Probability5th; // 黑卡在第五抽第10次概率
+        const subsequentRoundspecial1inlastProbability5th = 0.01113; // 设定黑金卡在第五抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability5th = 0 * special2inpoolProbability; // 黑卡在第五抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability6th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第六抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability6th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第六抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability6th = subsequentRoundspecial1infirst9Probability6th; // 设定黑金卡在第六抽第10次的概率
+        const subsequentRoundspecial2in10thProbability6th = subsequentRoundspecial2infirst9Probability6th; // 黑卡在第六抽第10次概率
+        const subsequentRoundspecial1inlastProbability6th = 0.2; // 设定黑金卡在第六抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability6th = 0 * special2inpoolProbability; // 黑卡在第六抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability7th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第七抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability7th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第七抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability7th = subsequentRoundspecial1infirst9Probability7th; // 设定黑金卡在第七抽第10次的概率
+        const subsequentRoundspecial2in10thProbability7th = subsequentRoundspecial2infirst9Probability7th; // 黑卡在第七抽第10次概率
+        const subsequentRoundspecial1inlastProbability7th = 0.01113; // 设定黑金卡在第七抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability7th = 0 * special2inpoolProbability; // 黑卡在第七抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability8th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第八抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability8th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第八抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability8th = subsequentRoundspecial1infirst9Probability8th; // 设定黑金卡在第八抽第10次的概率
+        const subsequentRoundspecial2in10thProbability8th = subsequentRoundspecial2infirst9Probability8th; // 黑卡在第八抽第10次概率
+        const subsequentRoundspecial1inlastProbability8th = 0.01113; // 设定黑金卡在第八抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability8th = 0 * special2inpoolProbability; // 黑卡在第八抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability9th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第九抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability9th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第九抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability9th = subsequentRoundspecial1infirst9Probability9th; // 设定黑金卡在第九抽第10次的概率
+        const subsequentRoundspecial2in10thProbability9th = subsequentRoundspecial2infirst9Probability9th; // 黑卡在第九抽第10次概率
+        const subsequentRoundspecial1inlastProbability9th = 0.01113; // 设定黑金卡在第九抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability9th = 0 * special2inpoolProbability; // 黑卡在第九抽最后一次的概率
+
+        const subsequentRoundspecial1infirst9Probability10th = subsequentRoundspecial1infirst9Probability1st; // 黑金卡在第十抽抽卡前9次概率
+        const subsequentRoundspecial2infirst9Probability10th = subsequentRoundspecial2infirst9Probability1st; // 黑卡在第十抽抽卡前9次概率
+        const subsequentRoundspecial1in10thProbability10th = subsequentRoundspecial1infirst9Probability10th; // 设定黑金卡在第十抽第10次的概率
+        const subsequentRoundspecial2in10thProbability10th = subsequentRoundspecial2infirst9Probability10th; // 黑卡在第十抽第10次概率
+        const subsequentRoundspecial1inlastProbability10th = 0.3; // 设定黑金卡在第十抽最后一次的概率
+        const subsequentRoundspecial2inlastProbability10th = 0 * special2inpoolProbability; // 黑卡在第十抽最后一次的概率
+
+        // 定义第二轮及之后的概率数组 (10次，每次11抽的概率)
+        const subsequentRoundProbabilities = [
+            // 第1次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability1st - subsequentRoundspecial2infirst9Probability1st, the10th: 1 - subsequentRoundspecial1in10thProbability1st - subsequentRoundspecial2in10thProbability1st, last: 1 - subsequentRoundspecial1inlastProbability1st - subsequentRoundspecial2inlastProbability1st },
+                special1: { first9: subsequentRoundspecial1infirst9Probability1st, the10th: subsequentRoundspecial1in10thProbability1st, last: subsequentRoundspecial1inlastProbability1st },
+                special2: { first9: subsequentRoundspecial2infirst9Probability1st, the10th: subsequentRoundspecial2in10thProbability1st, last: subsequentRoundspecial2inlastProbability1st }
+            },
+            // 第2次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability2nd - subsequentRoundspecial2infirst9Probability2nd, the10th: 1 - subsequentRoundspecial1in10thProbability2nd - subsequentRoundspecial2in10thProbability2nd, last: 1 - subsequentRoundspecial1inlastProbability2nd - subsequentRoundspecial2inlastProbability2nd },
+                special1: { first9: subsequentRoundspecial1infirst9Probability2nd, the10th: subsequentRoundspecial1in10thProbability2nd, last: subsequentRoundspecial1inlastProbability2nd },
+                special2: { first9: subsequentRoundspecial2infirst9Probability2nd, the10th: subsequentRoundspecial2in10thProbability2nd, last: subsequentRoundspecial2inlastProbability2nd }
+            },
+            // 第3次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability3rd - subsequentRoundspecial2infirst9Probability3rd, the10th: 1 - subsequentRoundspecial1in10thProbability3rd - subsequentRoundspecial2in10thProbability3rd, last: 1 - subsequentRoundspecial1inlastProbability3rd - subsequentRoundspecial2inlastProbability3rd },
+                special1: { first9: subsequentRoundspecial1infirst9Probability3rd, the10th: subsequentRoundspecial1in10thProbability3rd, last: subsequentRoundspecial1inlastProbability3rd },
+                special2: { first9: subsequentRoundspecial2infirst9Probability3rd, the10th: subsequentRoundspecial2in10thProbability3rd, last: subsequentRoundspecial2inlastProbability3rd }
+            },
+            // 第4次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability4th - subsequentRoundspecial2infirst9Probability4th, the10th: 1 - subsequentRoundspecial1in10thProbability4th - subsequentRoundspecial2in10thProbability4th, last: 1 - subsequentRoundspecial1inlastProbability4th - subsequentRoundspecial2inlastProbability4th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability4th, the10th: subsequentRoundspecial1in10thProbability4th, last: subsequentRoundspecial1inlastProbability4th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability4th, the10th: subsequentRoundspecial2in10thProbability4th, last: subsequentRoundspecial2inlastProbability4th }
+            },
+            // 第5次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability5th - subsequentRoundspecial2infirst9Probability5th, the10th: 1 - subsequentRoundspecial1in10thProbability5th - subsequentRoundspecial2in10thProbability5th, last: 1 - subsequentRoundspecial1inlastProbability5th - subsequentRoundspecial2inlastProbability5th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability5th, the10th: subsequentRoundspecial1in10thProbability5th, last: subsequentRoundspecial1inlastProbability5th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability5th, the10th: subsequentRoundspecial2in10thProbability5th, last: subsequentRoundspecial2inlastProbability5th }
+            },
+            // 第6次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability6th - subsequentRoundspecial2infirst9Probability6th, the10th: 1 - subsequentRoundspecial1in10thProbability6th - subsequentRoundspecial2in10thProbability6th, last: 1 - subsequentRoundspecial1inlastProbability6th - subsequentRoundspecial2inlastProbability6th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability6th, the10th: subsequentRoundspecial1in10thProbability6th, last: subsequentRoundspecial1inlastProbability6th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability6th, the10th: subsequentRoundspecial2in10thProbability6th, last: subsequentRoundspecial2inlastProbability6th }
+            },
+            // 第7次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability7th - subsequentRoundspecial2infirst9Probability7th, the10th: 1 - subsequentRoundspecial1in10thProbability7th - subsequentRoundspecial2in10thProbability7th, last: 1 - subsequentRoundspecial1inlastProbability7th - subsequentRoundspecial2inlastProbability7th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability7th, the10th: subsequentRoundspecial1in10thProbability7th, last: subsequentRoundspecial1inlastProbability7th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability7th, the10th: subsequentRoundspecial2in10thProbability7th, last: subsequentRoundspecial2inlastProbability7th }
+            },
+            // 第8次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability8th - subsequentRoundspecial2infirst9Probability8th, the10th: 1 - subsequentRoundspecial1in10thProbability8th - subsequentRoundspecial2in10thProbability8th, last: 1 - subsequentRoundspecial1inlastProbability8th - subsequentRoundspecial2inlastProbability8th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability8th, the10th: subsequentRoundspecial1in10thProbability8th, last: subsequentRoundspecial1inlastProbability8th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability8th, the10th: subsequentRoundspecial2in10thProbability8th, last: subsequentRoundspecial2inlastProbability8th }
+            },
+            // 第9次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability9th - subsequentRoundspecial2infirst9Probability9th, the10th: 1 - subsequentRoundspecial1in10thProbability9th - subsequentRoundspecial2in10thProbability9th, last: 1 - subsequentRoundspecial1inlastProbability9th - subsequentRoundspecial2inlastProbability9th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability9th, the10th: subsequentRoundspecial1in10thProbability9th, last: subsequentRoundspecial1inlastProbability9th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability9th, the10th: subsequentRoundspecial2in10thProbability9th, last: subsequentRoundspecial2inlastProbability9th }
+            },
+            // 第10次11抽的概率
+            {
+                normal: { first9: 1 - subsequentRoundspecial1infirst9Probability10th - subsequentRoundspecial2infirst9Probability10th, the10th: 1 - subsequentRoundspecial1in10thProbability10th - subsequentRoundspecial2in10thProbability10th, last: 1 - subsequentRoundspecial1inlastProbability10th - subsequentRoundspecial2inlastProbability10th },
+                special1: { first9: subsequentRoundspecial1infirst9Probability10th, the10th: subsequentRoundspecial1in10thProbability10th, last: subsequentRoundspecial1inlastProbability10th },
+                special2: { first9: subsequentRoundspecial2infirst9Probability10th, the10th: subsequentRoundspecial2in10thProbability10th, last: subsequentRoundspecial2inlastProbability10th }
+            }
+        ];
+
+        function drawCard(probabilities) {
+            const rand = Math.random();
+            if (rand < probabilities.special2) {
+                return special2Pool[Math.floor(Math.random() * special2Pool.length)];
+            } else if (rand < probabilities.special2 + probabilities.special1) {
+                return special1Pool[Math.floor(Math.random() * special1Pool.length)];
+            } else {
+                return normalPool[0];
+            }
+        }
+
+        function performRound(roundCount) {
+            const results = [];
+            
+            // 执行指定轮数的11抽
+            for (let round = 0; round < roundCount; round++) {
+                const roundResults = [];
+                const probabilities = round === 0 ? roundProbabilities : subsequentRoundProbabilities;
+                for (let draw = 0; draw < 10; draw++) {
+                    const currentDraw = [];
+                    const currentProbabilities = probabilities[draw];
+                    
+                    // 前9张卡
+                    for (let i = 0; i < 9; i++) {
+                        const probs = {
+                            special2: currentProbabilities.special2.first9,
+                            special1: currentProbabilities.special1.first9
+                        };
+                        currentDraw.push(drawCard(probs));
+                    }
+                    
+                    // 第10张卡
+                    const tenthProbs = {
+                        special2: currentProbabilities.special2.the10th,
+                        special1: currentProbabilities.special1.the10th
+                    };
+                    currentDraw.push(drawCard(tenthProbs));
+                    
+                    // 第11张保底
+                    const lastProbs = {
+                        special2: currentProbabilities.special2.last,
+                        special1: currentProbabilities.special1.last
+                    };
+                    currentDraw.push(drawCard(lastProbs));
+                    
+                    roundResults.push(currentDraw);
+                }
+                results.push(roundResults);
+            }
+            
+            return results;
+        }
+
+        function displayResults(results) {
+            const resultDiv = document.getElementById('results');
+            resultDiv.innerHTML = '';
+            
+            results.forEach((roundResults, roundIndex) => {
+                // 计算整轮抽卡的特殊卡总数
+                const totalSpecialCards = roundResults.reduce((total, draw) => {
+                    return total + draw.filter(card => 
+                        special1Pool.includes(card) || special2Pool.includes(card)
+                    ).length;
+                }, 0);
+                
+                // 如果是欧皇（整轮特殊卡 >= 2），添加欧皇标题
+                if (totalSpecialCards >= 2) {
+                    const luckyTitle = document.createElement('div');
+                    luckyTitle.className = 'lucky-banner';
+                    luckyTitle.innerHTML = `✨ 第${roundIndex + 1}轮欧皇驾到！获得了 ${totalSpecialCards} 张特殊卡 ✨`;
+                    resultDiv.appendChild(luckyTitle);
+                }
+                
+                roundResults.forEach((draw, drawIndex) => {
+                    const drawResult = document.createElement('div');
+                    drawResult.className = 'draw-result';
+                    drawResult.innerHTML = `<h3>第${roundIndex + 1}轮第${drawIndex + 1}次抽卡结果：</h3>`;
+                    
+                    draw.forEach((card, cardIndex) => {
+                        if (special1Pool.includes(card) || special2Pool.includes(card)) {
+                            drawResult.innerHTML += `<p class="special-card">第${cardIndex + 1}张：${card}</p>`;
+                        } else {
+                            drawResult.innerHTML += `<p>第${cardIndex + 1}张：未抽到特殊卡</p>`;
+                        }
+                    });
+                    
+                    resultDiv.appendChild(drawResult);
+                });
+            });
+        }
+
+        function startDraw() {
+            const roundCount = parseInt(document.getElementById('rounds').value, 10);
+            const results = performRound(roundCount);
+            displayResults(results);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
